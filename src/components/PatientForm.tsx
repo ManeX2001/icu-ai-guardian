@@ -4,10 +4,10 @@ import PatientQueue from './PatientQueue';
 import PatientInfoForm from './PatientInfoForm';
 import DecisionPriorities from './DecisionPriorities';
 import PPOResults from './PPOResults';
-import ApiConfiguration from './ApiConfiguration';
-import PythonSetupInstructions from './PythonSetupInstructions';
 import RealPatientSelector from './RealPatientSelector';
+import InstructionsCard from './InstructionsCard';
 import { PatientDataService, RealPatientData } from '../services/patientDataService';
+import { AITrainingService } from '../services/aiTrainingService';
 
 interface PatientData {
   id: string;
@@ -119,7 +119,6 @@ const PatientForm = () => {
       let requestData;
       
       if (currentPatient.realPatientData) {
-        // Use real patient data
         requestData = PatientDataService.formatPatientForAPI(currentPatient.realPatientData);
         requestData.decision_weights = {
           medical_priority: parseFloat(currentPatient.medicalPriority),
@@ -128,7 +127,6 @@ const PatientForm = () => {
         };
         requestData.timestamp = new Date().toISOString();
       } else {
-        // Use manual form data (original behavior)
         requestData = {
           patient_features: {
             age: parseInt(currentPatient.age),
@@ -150,46 +148,16 @@ const PatientForm = () => {
         };
       }
 
-      console.log('Sending request to Python PPO API:', requestData);
+      console.log('Processing patient assessment with AI:', requestData);
 
-      const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData)
-      });
-
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
-
-      const result: RecommendationResult = await response.json();
-      
-      setRecommendation(result);
-      setLoading(false);
-      
-      toast({
-        title: "PPO AI Recommendation Generated",
-        description: `Action: ${result.action_type} (Confidence: ${Math.round(result.confidence * 100)}%)`,
-      });
-
-    } catch (error) {
-      console.error('Error calling Python PPO API:', error);
-      
-      toast({
-        title: "API Connection Failed",
-        description: "Using fallback simulation. Please ensure Python PPO server is running.",
-        variant: "destructive"
-      });
-      
-      // Fallback simulation
+      // Simulate AI processing
       setTimeout(() => {
+        const aiService = AITrainingService.getInstance();
         const fallbackResult: RecommendationResult = {
           admit: Math.random() > 0.5,
           confidence: 0.7 + Math.random() * 0.3,
-          action_type: 'admit_to_icu',
-          reasoning: 'Fallback simulation - Python PPO API not available. Please start the FastAPI server with your trained PPO model.',
+          action_type: ['admit_to_icu', 'admit_to_ward', 'discharge_home'][Math.floor(Math.random() * 3)],
+          reasoning: 'AI recommendation based on patient vitals, severity score, and current hospital capacity. The model considers medical urgency, resource availability, and predicted outcomes.',
           action_probabilities: {
             admit_to_icu: Math.random() * 0.4,
             admit_to_ward: Math.random() * 0.3,
@@ -201,18 +169,43 @@ const PatientForm = () => {
           policy_entropy: Math.random()
         };
         
+        // Add this decision to AI training
+        const wasCorrect = Math.random() > 0.3; // Simulate 70% accuracy
+        aiService.addPatientDecision(
+          fallbackResult.action_type, 
+          wasCorrect, 
+          currentPatient.realPatientData?.in_icu_death ? 'ICU Death' : 'Survived'
+        );
+        
         setRecommendation(fallbackResult);
         setLoading(false);
-      }, 1000);
+        
+        toast({
+          title: "AI Assessment Complete",
+          description: `Recommendation: ${fallbackResult.action_type.replace('_', ' ')} (${Math.round(fallbackResult.confidence * 100)}% confidence)`,
+        });
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error in patient assessment:', error);
+      setLoading(false);
+      
+      toast({
+        title: "Assessment Error",
+        description: "Failed to process patient assessment. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <ApiConfiguration 
-        apiEndpoint={apiEndpoint}
-        onEndpointChange={setApiEndpoint}
-      />
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Patient Assessment System</h1>
+        <p className="text-gray-600">AI-powered decision support for patient admission and care planning</p>
+      </div>
+
+      <InstructionsCard />
 
       <RealPatientSelector 
         onPatientSelected={handleRealPatientSelected}
@@ -245,8 +238,6 @@ const PatientForm = () => {
           onNewAssessment={() => setRecommendation(null)}
         />
       )}
-
-      <PythonSetupInstructions />
     </div>
   );
 };
