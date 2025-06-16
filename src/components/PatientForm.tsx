@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import PatientQueue from './PatientQueue';
@@ -7,6 +6,8 @@ import DecisionPriorities from './DecisionPriorities';
 import PPOResults from './PPOResults';
 import ApiConfiguration from './ApiConfiguration';
 import PythonSetupInstructions from './PythonSetupInstructions';
+import RealPatientSelector from './RealPatientSelector';
+import { PatientDataService, RealPatientData } from '../services/patientDataService';
 
 interface PatientData {
   id: string;
@@ -17,6 +18,7 @@ interface PatientData {
   medicalPriority: string;
   economicPriority: string;
   operationalPriority: string;
+  realPatientData?: RealPatientData;
 }
 
 interface RecommendationResult {
@@ -51,6 +53,22 @@ const PatientForm = () => {
   const [loading, setLoading] = useState(false);
   const [apiEndpoint, setApiEndpoint] = useState('http://localhost:8000/api/admission-decision');
   const { toast } = useToast();
+
+  const handleRealPatientSelected = (realPatient: RealPatientData) => {
+    const severity = PatientDataService.calculateSeverityScore(realPatient);
+    setCurrentPatient({
+      ...currentPatient,
+      age: Math.round(realPatient.age).toString(),
+      severity: severity.toString(),
+      arrivalType: realPatient.admission_type.toLowerCase(),
+      realPatientData: realPatient
+    });
+    
+    toast({
+      title: "Real Patient Data Loaded",
+      description: `Patient ${realPatient.icustay_id} with actual medical vitals loaded`,
+    });
+  };
 
   const addPatient = () => {
     if (!currentPatient.age) {
@@ -98,26 +116,39 @@ const PatientForm = () => {
     setLoading(true);
     
     try {
-      // Prepare data for Python PPO API
-      const requestData = {
-        patient_features: {
-          age: parseInt(currentPatient.age),
-          severity: parseInt(currentPatient.severity),
-          arrival_type: currentPatient.arrivalType,
-          predicted_los: parseInt(currentPatient.predictedLos)
-        },
-        hospital_state: {
-          icu_occupancy: 0.85, // This would come from real hospital data
-          ward_occupancy: 0.75,
-          staff_availability: 0.9
-        },
-        decision_weights: {
+      let requestData;
+      
+      if (currentPatient.realPatientData) {
+        // Use real patient data
+        requestData = PatientDataService.formatPatientForAPI(currentPatient.realPatientData);
+        requestData.decision_weights = {
           medical_priority: parseFloat(currentPatient.medicalPriority),
           economic_priority: parseFloat(currentPatient.economicPriority),
           operational_priority: parseFloat(currentPatient.operationalPriority)
-        },
-        timestamp: new Date().toISOString()
-      };
+        };
+        requestData.timestamp = new Date().toISOString();
+      } else {
+        // Use manual form data (original behavior)
+        requestData = {
+          patient_features: {
+            age: parseInt(currentPatient.age),
+            severity: parseInt(currentPatient.severity),
+            arrival_type: currentPatient.arrivalType,
+            predicted_los: parseInt(currentPatient.predictedLos)
+          },
+          hospital_state: {
+            icu_occupancy: 0.85,
+            ward_occupancy: 0.75,
+            staff_availability: 0.9
+          },
+          decision_weights: {
+            medical_priority: parseFloat(currentPatient.medicalPriority),
+            economic_priority: parseFloat(currentPatient.economicPriority),
+            operational_priority: parseFloat(currentPatient.operationalPriority)
+          },
+          timestamp: new Date().toISOString()
+        };
+      }
 
       console.log('Sending request to Python PPO API:', requestData);
 
@@ -146,7 +177,6 @@ const PatientForm = () => {
     } catch (error) {
       console.error('Error calling Python PPO API:', error);
       
-      // Fallback to simulated response if API is not available
       toast({
         title: "API Connection Failed",
         description: "Using fallback simulation. Please ensure Python PPO server is running.",
@@ -182,6 +212,10 @@ const PatientForm = () => {
       <ApiConfiguration 
         apiEndpoint={apiEndpoint}
         onEndpointChange={setApiEndpoint}
+      />
+
+      <RealPatientSelector 
+        onPatientSelected={handleRealPatientSelected}
       />
 
       <PatientQueue 
