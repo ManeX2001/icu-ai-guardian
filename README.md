@@ -1,73 +1,102 @@
-# Welcome to your Lovable project
 
-## Project info
+# ICU PPO Backend
 
-**URL**: https://lovable.dev/projects/dcf7f7ec-7dc6-4542-9e02-19ee2c27295a
+Complete end-to-end Python backend for ICU decision making using Proximal Policy Optimization (PPO).
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+1. **Data Ingestion**: Loads ICU patient data with preprocessing and normalization
+2. **Gym Environment**: ICU decision environment with 4 discrete actions
+3. **PPO Agent**: PyTorch-based PPO implementation with policy and value networks
+4. **Model Persistence**: Automatic checkpoint saving and loading
+5. **FastAPI Service**: REST API for predictions and training
+6. **Docker Support**: Containerized deployment
 
-**Use Lovable**
+## Quick Start
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/dcf7f7ec-7dc6-4542-9e02-19ee2c27295a) and start prompting.
+### Local Setup
 
-Changes made via Lovable will be committed automatically to this repo.
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-**Use your preferred IDE**
+# Setup directories and train initial model
+python setup_and_train.py --train
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Start the API server
+python main.py
 ```
 
-**Edit a file directly in GitHub**
+### Docker Deployment
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+# Build the image
+docker build -t icu-ppo-backend .
 
-**Use GitHub Codespaces**
+# Run the container
+docker run -p 8000:8000 -v $(pwd)/models:/app/models icu-ppo-backend
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## API Endpoints
 
-## What technologies are used for this project?
+### Health Check
+```
+GET /health
+```
 
-This project is built with:
+### Make Prediction
+```
+POST /predict
+Content-Type: application/json
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+{
+  "DiastolicBP": 70.0,
+  "HeartRate": 80.0,
+  "MeanBP": 85.0,
+  "RespRate": 16.0,
+  "SpO2": 98.0,
+  "SysBP": 120.0,
+  "Temperature": 98.6,
+  "age": 65.0,
+  "gender": "M",
+  "admission_type": "EMERGENCY"
+}
+```
 
-## How can I deploy this project?
+### Train Model
+```
+POST /train
+Content-Type: application/json
 
-Simply open [Lovable](https://lovable.dev/projects/dcf7f7ec-7dc6-4542-9e02-19ee2c27295a) and click on Share -> Publish.
+{
+  "epochs": 10
+}
+```
 
-## Can I connect a custom domain to my Lovable project?
+## Actions
 
-Yes, you can!
+- **0**: Discharge
+- **1**: Ward Admission
+- **2**: ICU Admission  
+- **3**: Specialist Referral
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Training
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+```bash
+# Train with custom parameters
+python train_ppo_icu.py --epochs 500 --save-interval 50
+```
+
+## Architecture
+
+- **PolicyNetwork**: Neural network for action selection
+- **ValueNetwork**: Neural network for state value estimation
+- **ICUEnv**: Gym-compatible environment for training
+- **PPOAgent**: Complete PPO implementation with GAE
+- **ICUDataLoader**: Data preprocessing and normalization
+
+## Model Files
+
+- `models/best_ppo_icu.pt`: Best performing model
+- `models/final_ppo_icu.pt`: Final trained model
+- `models/ppo_icu_epoch_*.pt`: Periodic checkpoints
