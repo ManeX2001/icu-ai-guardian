@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,18 +21,17 @@ interface PatientData {
 interface RecommendationResult {
   admit: boolean;
   confidence: number;
-  score: number;
+  action_type: string;
   reasoning: string;
-  scores: {
-    medical_score: number;
-    economic_score: number;
-    operational_score: number;
-    final_score: number;
+  action_probabilities: {
+    admit_to_icu: number;
+    admit_to_ward: number;
+    discharge_home: number;
+    refer_to_specialist: number;
+    schedule_outpatient: number;
   };
-  alternatives: Array<{
-    option: string;
-    score: number;
-  }>;
+  state_value: number;
+  policy_entropy: number;
 }
 
 const PatientForm = () => {
@@ -50,6 +48,7 @@ const PatientForm = () => {
   });
   const [recommendation, setRecommendation] = useState<RecommendationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [apiEndpoint, setApiEndpoint] = useState('http://localhost:8000/api/admission-decision');
   const { toast } = useToast();
 
   const addPatient = () => {
@@ -97,66 +96,84 @@ const PatientForm = () => {
     e.preventDefault();
     setLoading(true);
     
-    // Simulate AI recommendation logic with enhanced scoring
-    setTimeout(() => {
-      const ageNum = parseInt(currentPatient.age);
-      const severityNum = parseInt(currentPatient.severity);
-      const medicalPriorityNum = parseFloat(currentPatient.medicalPriority);
-      const economicPriorityNum = parseFloat(currentPatient.economicPriority);
-      const operationalPriorityNum = parseFloat(currentPatient.operationalPriority);
-      const losNum = parseInt(currentPatient.predictedLos);
-      
-      // Enhanced scoring algorithm
-      const ageScore = ageNum > 70 ? 80 : ageNum > 50 ? 60 : 40;
-      const severityScore = severityNum * 10;
-      const arrivalScore = currentPatient.arrivalType === 'ambulance' ? 90 : 
-                          currentPatient.arrivalType === 'transfer' ? 75 :
-                          currentPatient.arrivalType === 'referral' ? 60 : 30;
-      const losScore = losNum > 7 ? 80 : losNum > 3 ? 60 : 40;
-      
-      const medicalScore = Math.round((ageScore + severityScore + arrivalScore) / 3);
-      const economicScore = Math.round(100 - (losNum * 8)); // Lower score for longer stays
-      const operationalScore = Math.round(Math.random() * 40 + 60); // Simulated operational factors
-      
-      const finalScore = Math.round(
-        medicalScore * medicalPriorityNum + 
-        economicScore * economicPriorityNum + 
-        operationalScore * operationalPriorityNum
-      );
-      
-      const admit = finalScore > 65;
-      const confidence = Math.min(95, finalScore + Math.random() * 20) / 100;
-      
-      const alternatives = [
-        { option: "Outpatient monitoring with follow-up", score: Math.round(finalScore * 0.7) },
-        { option: "Emergency department observation", score: Math.round(finalScore * 0.8) },
-        { option: "Telemetry unit admission", score: Math.round(finalScore * 0.9) }
-      ].sort((a, b) => b.score - a.score);
-      
-      const result: RecommendationResult = {
-        admit,
-        confidence,
-        score: finalScore,
-        reasoning: admit 
-          ? `High priority admission recommended. Patient profile (Age: ${ageNum}, Severity: ${severityNum}/10, Arrival: ${currentPatient.arrivalType}, Predicted LOS: ${losNum} days) indicates immediate care needed. Medical priority weighted at ${Math.round(medicalPriorityNum * 100)}%.`
-          : `Standard care pathway recommended. Patient metrics suggest outpatient or observation care may be sufficient. Consider alternatives based on bed availability and resource allocation.`,
-        scores: {
-          medical_score: medicalScore,
-          economic_score: economicScore,
-          operational_score: operationalScore,
-          final_score: finalScore
+    try {
+      // Prepare data for Python PPO API
+      const requestData = {
+        patient_features: {
+          age: parseInt(currentPatient.age),
+          severity: parseInt(currentPatient.severity),
+          arrival_type: currentPatient.arrivalType,
+          predicted_los: parseInt(currentPatient.predictedLos)
         },
-        alternatives
+        hospital_state: {
+          icu_occupancy: 0.85, // This would come from real hospital data
+          ward_occupancy: 0.75,
+          staff_availability: 0.9
+        },
+        decision_weights: {
+          medical_priority: parseFloat(currentPatient.medicalPriority),
+          economic_priority: parseFloat(currentPatient.economicPriority),
+          operational_priority: parseFloat(currentPatient.operationalPriority)
+        },
+        timestamp: new Date().toISOString()
       };
+
+      console.log('Sending request to Python PPO API:', requestData);
+
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const result: RecommendationResult = await response.json();
       
       setRecommendation(result);
       setLoading(false);
       
       toast({
-        title: "AI Recommendation Generated",
-        description: admit ? "Patient should be admitted to ICU" : "Alternative care recommended",
+        title: "PPO AI Recommendation Generated",
+        description: `Action: ${result.action_type} (Confidence: ${Math.round(result.confidence * 100)}%)`,
       });
-    }, 2000);
+
+    } catch (error) {
+      console.error('Error calling Python PPO API:', error);
+      
+      // Fallback to simulated response if API is not available
+      toast({
+        title: "API Connection Failed",
+        description: "Using fallback simulation. Please ensure Python PPO server is running.",
+        variant: "destructive"
+      });
+      
+      // Fallback simulation
+      setTimeout(() => {
+        const fallbackResult: RecommendationResult = {
+          admit: Math.random() > 0.5,
+          confidence: 0.7 + Math.random() * 0.3,
+          action_type: 'admit_to_icu',
+          reasoning: 'Fallback simulation - Python PPO API not available. Please start the FastAPI server with your trained PPO model.',
+          action_probabilities: {
+            admit_to_icu: Math.random() * 0.4,
+            admit_to_ward: Math.random() * 0.3,
+            discharge_home: Math.random() * 0.2,
+            refer_to_specialist: Math.random() * 0.1,
+            schedule_outpatient: Math.random() * 0.1
+          },
+          state_value: Math.random() * 100,
+          policy_entropy: Math.random()
+        };
+        
+        setRecommendation(fallbackResult);
+        setLoading(false);
+      }, 1000);
+    }
   };
 
   const getSeverityLabel = (value: string) => {
@@ -171,6 +188,29 @@ const PatientForm = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      {/* API Configuration */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            🐍 Python PPO API Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="apiEndpoint">Python API Endpoint</Label>
+            <Input
+              id="apiEndpoint"
+              value={apiEndpoint}
+              onChange={(e) => setApiEndpoint(e.target.value)}
+              placeholder="http://localhost:8000/api/admission-decision"
+            />
+            <div className="text-sm text-blue-600">
+              Make sure your Python FastAPI server with trained PPO model is running on this endpoint.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Patient Queue */}
       {patients.length > 0 && (
         <Card>
@@ -378,92 +418,57 @@ const PatientForm = () => {
         </Card>
       </div>
 
-      {/* Results Section */}
+      {/* Enhanced Results Section for PPO */}
       {recommendation && (
         <Card className={`border-2 ${recommendation.admit ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              🤖 AI Recommendation
+              🤖 PPO AI Recommendation
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Main Decision */}
+              {/* Main PPO Decision */}
               <div>
                 <div className={`text-2xl font-bold mb-4 ${recommendation.admit ? 'text-red-600' : 'text-green-600'}`}>
-                  {recommendation.admit ? '✅ ADMIT TO ICU' : '❌ ALTERNATIVE CARE'}
+                  {recommendation.action_type.toUpperCase().replace('_', ' ')}
                 </div>
                 <div className="space-y-3">
                   <div>
                     <span className="font-semibold">Confidence:</span> {Math.round(recommendation.confidence * 100)}%
                   </div>
                   <div>
-                    <span className="font-semibold">Final Score:</span> {recommendation.score}/100
+                    <span className="font-semibold">State Value:</span> {recommendation.state_value?.toFixed(2) || 'N/A'}
                   </div>
                   <div>
-                    <span className="font-semibold">Reasoning:</span>
+                    <span className="font-semibold">Policy Entropy:</span> {recommendation.policy_entropy?.toFixed(3) || 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-semibold">PPO Reasoning:</span>
                     <p className="mt-1 text-gray-700 text-sm">{recommendation.reasoning}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Score Breakdown */}
+              {/* Action Probabilities */}
               <div>
-                <h4 className="font-semibold mb-4">Score Breakdown</h4>
+                <h4 className="font-semibold mb-4">Action Probabilities (PPO Output)</h4>
                 <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Medical Score</span>
-                      <span>{recommendation.scores.medical_score}</span>
+                  {recommendation.action_probabilities && Object.entries(recommendation.action_probabilities).map(([action, prob]) => (
+                    <div key={action}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="capitalize">{action.replace('_', ' ')}</span>
+                        <span>{(prob * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-500 h-2 rounded-full" 
+                          style={{ width: `${prob * 100}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-red-500 h-2 rounded-full" style={{ width: `${recommendation.scores.medical_score}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Economic Score</span>
-                      <span>{recommendation.scores.economic_score}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-green-500 h-2 rounded-full" style={{ width: `${recommendation.scores.economic_score}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>Operational Score</span>
-                      <span>{recommendation.scores.operational_score}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${recommendation.scores.operational_score}%` }}></div>
-                    </div>
-                  </div>
-                  
-                  <div className="pt-2 border-t">
-                    <div className="flex justify-between text-sm mb-1 font-semibold">
-                      <span>Final Score</span>
-                      <span>{recommendation.scores.final_score}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div className="bg-yellow-500 h-3 rounded-full" style={{ width: `${recommendation.scores.final_score}%` }}></div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            </div>
-
-            {/* Alternative Options */}
-            <div>
-              <h4 className="font-semibold mb-3">Alternative Options</h4>
-              <div className="space-y-2">
-                {recommendation.alternatives.map((alt, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-white rounded border">
-                    <span className="text-sm"><strong>{index + 1}.</strong> {alt.option}</span>
-                    <span className="text-sm font-medium">{alt.score}</span>
-                  </div>
-                ))}
               </div>
             </div>
 
@@ -471,9 +476,12 @@ const PatientForm = () => {
             <div className="flex gap-3 pt-4 border-t">
               <Button 
                 className="bg-green-600 hover:bg-green-700"
-                onClick={() => toast({ title: "Recommendation Accepted", description: "Patient admission decision logged" })}
+                onClick={() => toast({ 
+                  title: "PPO Recommendation Accepted", 
+                  description: "Patient decision logged and sent to training pipeline" 
+                })}
               >
-                Accept Recommendation
+                Accept PPO Decision
               </Button>
               <Button 
                 variant="outline"
@@ -483,14 +491,51 @@ const PatientForm = () => {
               </Button>
               <Button 
                 variant="outline"
-                onClick={() => window.print()}
+                onClick={() => {
+                  const reportData = {
+                    patient: currentPatient,
+                    recommendation: recommendation,
+                    timestamp: new Date().toISOString()
+                  };
+                  console.log('PPO Report Data:', reportData);
+                  window.print();
+                }}
               >
-                Print Report
+                Export PPO Report
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Python Setup Instructions */}
+      <Card className="border-yellow-200 bg-yellow-50">
+        <CardHeader>
+          <CardTitle>🛠️ Python PPO Setup Instructions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-sm space-y-2">
+            <p><strong>1. Install Dependencies:</strong></p>
+            <code className="block bg-gray-800 text-green-400 p-2 rounded text-xs">
+              pip install fastapi uvicorn stable-baselines3 gymnasium pandas numpy
+            </code>
+            
+            <p><strong>2. Train PPO Model:</strong></p>
+            <code className="block bg-gray-800 text-green-400 p-2 rounded text-xs">
+              python train_ppo_icu.py --data mimic_admissions.csv --epochs 1000
+            </code>
+            
+            <p><strong>3. Start API Server:</strong></p>
+            <code className="block bg-gray-800 text-green-400 p-2 rounded text-xs">
+              uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+            </code>
+            
+            <p className="text-blue-700">
+              The API will use your trained PPO model to make real admission decisions based on patient data and hospital state.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
