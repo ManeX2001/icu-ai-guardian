@@ -1,102 +1,73 @@
+# Welcome to your Lovable project
 
-# ICU PPO Backend
+## Project info
 
-Complete end-to-end Python backend for ICU decision making using Proximal Policy Optimization (PPO).
+**URL**: https://lovable.dev/projects/dcf7f7ec-7dc6-4542-9e02-19ee2c27295a
 
-## Features
+## How can I edit this code?
 
-1. **Data Ingestion**: Loads ICU patient data with preprocessing and normalization
-2. **Gym Environment**: ICU decision environment with 4 discrete actions
-3. **PPO Agent**: PyTorch-based PPO implementation with policy and value networks
-4. **Model Persistence**: Automatic checkpoint saving and loading
-5. **FastAPI Service**: REST API for predictions and training
-6. **Docker Support**: Containerized deployment
+There are several ways of editing your application.
 
-## Quick Start
+**Use Lovable**
 
-### Local Setup
+Simply visit the [Lovable Project](https://lovable.dev/projects/dcf7f7ec-7dc6-4542-9e02-19ee2c27295a) and start prompting.
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+Changes made via Lovable will be committed automatically to this repo.
 
-# Setup directories and train initial model
-python setup_and_train.py --train
+**Use your preferred IDE**
 
-# Start the API server
-python main.py
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+
+Follow these steps:
+
+```sh
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
+npm run dev
 ```
 
-### Docker Deployment
+**Edit a file directly in GitHub**
 
-```bash
-# Build the image
-docker build -t icu-ppo-backend .
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-# Run the container
-docker run -p 8000:8000 -v $(pwd)/models:/app/models icu-ppo-backend
-```
+**Use GitHub Codespaces**
 
-## API Endpoints
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-### Health Check
-```
-GET /health
-```
+## What technologies are used for this project?
 
-### Make Prediction
-```
-POST /predict
-Content-Type: application/json
+This project is built with:
 
-{
-  "DiastolicBP": 70.0,
-  "HeartRate": 80.0,
-  "MeanBP": 85.0,
-  "RespRate": 16.0,
-  "SpO2": 98.0,
-  "SysBP": 120.0,
-  "Temperature": 98.6,
-  "age": 65.0,
-  "gender": "M",
-  "admission_type": "EMERGENCY"
-}
-```
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-### Train Model
-```
-POST /train
-Content-Type: application/json
+## How can I deploy this project?
 
-{
-  "epochs": 10
-}
-```
+Simply open [Lovable](https://lovable.dev/projects/dcf7f7ec-7dc6-4542-9e02-19ee2c27295a) and click on Share -> Publish.
 
-## Actions
+## Can I connect a custom domain to my Lovable project?
 
-- **0**: Discharge
-- **1**: Ward Admission
-- **2**: ICU Admission  
-- **3**: Specialist Referral
+Yes, you can!
 
-## Training
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-```bash
-# Train with custom parameters
-python train_ppo_icu.py --epochs 500 --save-interval 50
-```
-
-## Architecture
-
-- **PolicyNetwork**: Neural network for action selection
-- **ValueNetwork**: Neural network for state value estimation
-- **ICUEnv**: Gym-compatible environment for training
-- **PPOAgent**: Complete PPO implementation with GAE
-- **ICUDataLoader**: Data preprocessing and normalization
-
-## Model Files
-
-- `models/best_ppo_icu.pt`: Best performing model
-- `models/final_ppo_icu.pt`: Final trained model
-- `models/ppo_icu_epoch_*.pt`: Periodic checkpoints
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
